@@ -10,7 +10,7 @@ module Squishling
   module Observer
     # What an observer is told about one provider request. handed_off is true when squish! sent the call to the
     # LLM (typically from a rescue) and false when squish_when or a missing implementation did. role is nil for an
-    # escalation attempt, :sample (with sample "a", "b", ...) or :judge, like squawk's metadata. attempt and
+    # escalation attempt, :sample (with sample "a", "b", ...), :judge, or :repair, like squawk's metadata. attempt and
     # attempts count the (expanded) escalation path the request belongs to. request is :chat, or :judgment for a
     # System One judge.
     Call = Data.define(:label, :purpose, :harness, :handed_off, :role, :sample, :attempt, :attempts, :model, :provider,

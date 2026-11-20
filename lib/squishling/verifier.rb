@@ -74,6 +74,8 @@ module Squishling
           [step[:include_when], "escalation step #{step[:model].inspect} include_when:"] if step[:include_when]
         end
         gates << [@definition.predicate, "squish_when"] if @definition.predicate
+        learners = @definition.klass.squishling_rescues.filter_map(&:learn_key)
+        gates += learners.map { |by| [by, "squish_rescue learn by:"] }
         gates.flat_map { |callable, what| KeywordCheck.messages(callable, names, open).map { "#{what} #{_1}" } }
       end
     end

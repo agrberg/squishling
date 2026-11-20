@@ -202,6 +202,7 @@ no declared error stays in Ruby, and any other error propagates.
 - One or more exception classes, as positional arguments. A subclass of a declared class matches.
 - `as:`, the name of the context key for the error (`:error` by default). It replaces a `squish_context` name
   spelled the same.
+- `learn:`, which lets the LLM's recovery teach the Ruby implementation (see [Learned repairs](repairs.md)).
 - The other options of [`squish!`](#handing-off-to-the-llm-with-squish) (`append_to_purpose:`, `context:`, `model:`,
   `escalation:`, `params:`, and so on), checked when you declare it.
 

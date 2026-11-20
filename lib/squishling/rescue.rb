@@ -4,14 +4,15 @@ module Squishling
   class Rescue
     attr_reader :errors
 
-    def self.build(owner, errors, as:, overrides:)
+    def self.build(owner, errors, as:, learn:, overrides:)
       where = "#{owner}#squish_rescue"
       check_errors!(where, errors)
       check_as!(where, as)
+      config = Repairs::Config.build(learn, where)
       # for_call checks the overrides exactly as `squish!` would, so a bad value fails here, not on a call.
       Definition.new(klass: owner, name: :squish_rescue).for_call(**overrides)
       check_context!(where, as, overrides[:context])
-      new(errors:, as:, overrides:)
+      new(errors:, as:, config:, overrides:)
     end
 
     def self.check_errors!(where, errors)
@@ -43,9 +44,10 @@ module Squishling
     end
     private_class_method :check_errors!, :check_as!, :check_context!
 
-    def initialize(errors:, as:, overrides:)
+    def initialize(errors:, as:, config:, overrides:)
       @errors = errors
       @as = as.to_sym
+      @config = config
       @overrides = overrides
     end
 
@@ -53,8 +55,35 @@ module Squishling
       errors.any? { |klass| klass === error } # rubocop:disable Style/CaseEquality
     end
 
-    def overrides_for(error)
-      @overrides.merge(context: (@overrides[:context] || {}).merge(@as => error))
+    def overrides_for(error, attempt = nil)
+      overrides = @overrides.merge(context: (@overrides[:context] || {}).merge(@as => error))
+      attempt ? overrides.merge(repair: attempt) : overrides
+    end
+
+    def learn?
+      !@config.nil?
+    end
+
+    def learn_key
+      @config&.by
+    end
+
+    def attempt(frame, error, impl)
+      Repairs::Attempt.new(config: @config, frame:, error:, impl:) if learn?
+    end
+
+    def active(frame)
+      Repairs::Active.lookup(@config, frame) if learn?
+    end
+
+    def repairs
+      return [] unless learn?
+
+      @config.store.snapshot.map { |entry| entry.merge(method: entry[:key].first, key: entry[:key].last) }
+    end
+
+    def forget_repairs
+      @config&.store&.clear
     end
   end
 end
