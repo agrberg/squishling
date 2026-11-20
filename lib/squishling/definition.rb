@@ -10,11 +10,11 @@ module Squishling
     # One attempt on RubyLLM's default model, when no level declares a model.
     DEFAULT_STEP = { model: nil, attempts: 1, forward_rejected: true }.freeze
 
-    attr_reader :klass, :name, :call_context, :handed_off
+    attr_reader :klass, :name, :call_context, :handed_off, :repair
 
     def initialize(klass:, name:, purpose: nil, append_to_purpose: nil, output_schema: nil, model: nil,
       provider: nil, params: nil, cache: nil, harness: nil, predicate: nil, fallback: nil, validator: nil,
-      squawk: nil, squawk_on: nil, budget: nil, call_context: {}, handed_off: false)
+      squawk: nil, squawk_on: nil, budget: nil, call_context: {}, handed_off: false, repair: nil)
       @klass = klass
       @name = name
       @purpose = purpose
@@ -33,13 +33,14 @@ module Squishling
       @budget = budget || {}
       @call_context = call_context
       @handed_off = handed_off
+      @repair = repair
     end
 
     # This definition with one call's overrides on top. The output schema, predicate, fallback, and validator
     # can't be overridden: the call must still return the method's result type.
     def for_call(purpose: nil, append_to_purpose: nil, context: nil, model: nil, escalation: nil,
       provider: nil, params: nil, cache: nil, harness: nil, max_total_output_tokens: nil,
-      max_total_input_tokens: nil)
+      max_total_input_tokens: nil, repair: nil)
       call_path = ModelPath.declare(model, escalation, "#{label} squish!")
       raise ConfigurationError, "#{label}: squish! provider: needs a model: or escalation:" if provider && !call_path
 
@@ -61,7 +62,8 @@ module Squishling
         cache: [call_cache, @cache].find { |level| !level.nil? },
         harness: call_harness || @harness, budget: @budget.merge(call_budget),
         call_context: @call_context.merge((context || {}).transform_keys(&:to_sym)),
-        handed_off: true # only squish! builds a definition this way; it is not part of a declared one
+        handed_off: true, # only squish! builds a definition this way; it is not part of a declared one
+        repair:
       )
     end
 
@@ -193,8 +195,21 @@ module Squishling
       klass.squishling_rescues.flat_map(&:errors)
     end
 
-    def rescue_overrides(error)
-      klass.squishling_rescues.find { |declared| declared.match?(error) }.overrides_for(error)
+    def rescue_for(error)
+      klass.squishling_rescues.find { |declared| declared.match?(error) }
+    end
+
+    # The first learned repair that applies to the call in progress (see Repairs), or nil.
+    def active_repair(frame)
+      klass.squishling_rescues.each do |declared|
+        active = declared.active(frame)
+        return active if active
+      end
+      nil
+    end
+
+    def replace_inputs(args, kwargs, changes)
+      Repairs::Arguments.replace(parameters, args, kwargs, changes)
     end
 
     def squish?(receiver, inputs)

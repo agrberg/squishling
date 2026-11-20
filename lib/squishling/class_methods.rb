@@ -209,13 +209,28 @@ module Squishling
     # The error is sent as context under the as: name. The other options are those of `squish!`. A class can declare
     # it more than once; the first match is used, and a subclass's declarations are tried before its parent's:
     #   squish_rescue VendorFormats::ParseError, append_to_purpose: "The parser failed; the error is in the context."
-    def squish_rescue(*errors, as: :error, **overrides)
-      (@squishling_rescues ||= []) << Rescue.build(self, errors, as:, overrides:)
+    # learn: makes the LLM's recovery teach the Ruby implementation, so a changed input stops reaching the LLM
+    # (see docs/repairs.md). by: names the inputs' key (a Proc of the method's inputs as keywords); inputs:, confirm:,
+    # limit:, expire_after:, and source: are optional:
+    #   squish_rescue KeyError, learn: { by: ->(vendor:, **) { vendor } }
+    def squish_rescue(*errors, as: :error, learn: nil, **overrides)
+      (@squishling_rescues ||= []) << Rescue.build(self, errors, as:, learn:, overrides:)
       self
     end
 
     def squishling_rescues
       (@squishling_rescues || []) + squishling_inherited(:squishling_rescues, [])
+    end
+
+    # What the squish_rescue declarations of this class and its ancestors have learned, as Hashes with :method, :key,
+    # :state (:candidate or :active), :rules, :confirmations, and :uses.
+    def squishling_repairs
+      squishling_rescues.flat_map(&:repairs)
+    end
+
+    def squishling_forget_repairs!
+      squishling_rescues.each(&:forget_repairs)
+      nil
     end
 
     def squished_methods

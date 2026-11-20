@@ -74,6 +74,7 @@ module Squishling
         case call.role
         when :sample then "sample:#{call.sample}"
         when :judge then "judge"
+        when :repair then "repair"
         else "squish:L#{call.attempt}"
         end
       end

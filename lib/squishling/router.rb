@@ -6,7 +6,7 @@ module Squishling
     # One squished call in progress. `phase` is :routing (deciding, e.g. running squish_when), :ruby (running
     # the implementation), or :llm (on the LLM path, including any fallback); `handed_off` records that squish!
     # already sent it to the LLM.
-    Frame = Struct.new(:receiver, :definition, :wrapper, :inputs, :phase, :handed_off)
+    Frame = Struct.new(:receiver, :definition, :wrapper, :inputs, :phase, :handed_off, :args, :kwargs)
 
     FRAMES_KEY = :__squishling_frames__
 
@@ -17,12 +17,13 @@ module Squishling
         end
 
         definition = receiver.class.squishling_definition(name)
-        frame = Frame.new(receiver, definition, wrapper, definition.bind_arguments(args, kwargs), :routing, false)
+        frame = Frame.new(receiver, definition, wrapper, definition.bind_arguments(args, kwargs), :routing, false,
+          args, kwargs)
         frames.push(frame)
         begin
           return route_to_llm(frame, definition, "predicate") if definition.squish?(receiver, frame.inputs)
 
-          run_ruby(frame, definition, receiver, impl)
+          run_ruby(frame, definition, impl)
         ensure
           frames.pop
         end
@@ -45,12 +46,18 @@ module Squishling
         route_to_llm(frame, frame.definition.for_call(**overrides), reason)
       end
 
+      # A declared StandardError also matches Squishling's own errors and the test helpers' (Testing::Error is not a
+      # Squishling::Error, so no fallback can hide a test setup mistake); neither goes to the LLM.
+      def unrescuable?(error)
+        error.is_a?(Error) || (defined?(Testing::Error) && error.is_a?(Testing::Error))
+      end
+
       private
 
       # The coerce is in `else`, so the rescues never see its errors.
-      def run_ruby(frame, definition, receiver, impl)
+      def run_ruby(frame, definition, impl)
         frame.phase = :ruby
-        value = impl.call
+        value = Repairs.call(frame, impl)
       rescue NotImplementedError => e
         # After squish!, the error came from the LLM path (a fallback, a proc), not a missing implementation.
         # Otherwise it propagates unless it is the method's own stub (see Wrapper.stub?).
@@ -60,15 +67,19 @@ module Squishling
       rescue *definition.rescued_errors => e
         raise if frame.handed_off || unrescuable?(e)
 
-        hand_off(receiver, definition.rescue_overrides(e), "squish_rescue #{e.class}")
+        hand_off_rescued(frame, e, impl)
       else
         definition.coerce(value)
       end
 
-      # A declared StandardError also matches Squishling's own errors and the test helpers' (Testing::Error is not a
-      # Squishling::Error, so no fallback can hide a test setup mistake); neither goes to the LLM.
-      def unrescuable?(error)
-        error.is_a?(Error) || (defined?(Testing::Error) && error.is_a?(Testing::Error))
+      # squish_rescue's hand-off, and what it learned from the failure (see Repairs::Attempt) once the call has its
+      # result and the Ruby phase is back.
+      def hand_off_rescued(frame, error, impl)
+        declared = frame.definition.rescue_for(error)
+        attempt = declared.attempt(frame, error, impl)
+        result = hand_off(frame.receiver, declared.overrides_for(error, attempt), "squish_rescue #{error.class}")
+        attempt&.finish(result)
+        result
       end
 
       # An inner call (`super`, or the method called from squish_when or a fallback) hands its value to user code

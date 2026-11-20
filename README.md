@@ -99,6 +99,9 @@ To rescue every squished method of a class the same way, declare the error once 
 `squish_rescue VendorFormats::ParseError` instead of writing the `rescue`. See
 [Rescuing declared errors](docs/routing.md#rescuing-declared-errors-with-squish_rescue).
 
+Add `learn:` and the LLM's recovery also teaches your Ruby: after a few inputs agree on how a key was renamed, the
+Ruby handles the new format itself, with no request. See [Learned repairs](docs/repairs.md).
+
 ### Retire code you no longer need
 
 Go the other way too. Find the parsers and handlers that serve a thin tail of your traffic and squish them. When a
@@ -229,6 +232,8 @@ sees it right where the value goes, and the purpose stays short and about the go
 - [Adapters](docs/adapters.md): the RubyLLM and OpenAI-compatible adapters, and writing your own
 - [Routing](docs/routing.md): when a call goes to the LLM, `squish!`, `append_to_purpose`, hardening a path,
   what the LLM sees
+- [Learned repairs](docs/repairs.md): `squish_rescue learn:`, which teaches the Ruby how a changed input maps to
+  the old one
 - [Output schemas](docs/schemas.md): schema forms, strict mode, typed results, optional vs. empty, contracts
 - [Failure handling](docs/failures.md): escalation, `squish_validate`, error classes, fallbacks
 - [Harnesses](docs/harnesses.md): escalation, squishsum, judges (chat or Jev), and custom harnesses

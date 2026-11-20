@@ -6,7 +6,8 @@ module Squishling
     # rule is #once. Build them through Script (the block Testing.install yields).
     class Rule
       # What a rule answers. nil means any. kind is :chat (Adapter#complete) or :judgment (Adapter#judge); role is
-      # nil (an escalation attempt, or any role when the rule names none), :sample, or :judge.
+      # nil (an escalation attempt, or any role when the rule names none), :sample, or :judge. A :repair request has
+      # no selector of its own: a rule that names no role answers it.
       Selector = Data.define(:kind, :role, :sample, :model, :provider, :attempt)
 
       # Rule#take when nothing is left to answer with.
