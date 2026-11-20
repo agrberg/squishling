@@ -211,7 +211,8 @@ Rules:
   same call is never rescued, so a fallback cannot loop. (A call to another squished object is its own call: if its
   `squish_fallback` raises a declared error, the enclosing call's Ruby raised it, and the enclosing call rescues
   it.) If the LLM also fails, the error it raises has the declared error as its
-  `cause`, and `squish_fallback` decides what to return, as for `squish!`.
+  `cause`, and `squish_fallback` decides what to return, as for `squish!`. Once the body has called `squish!`, the
+  declared rescues are off for the rest of that call: a declared error the body raises afterward propagates.
 - **The first declaration that matches is used, as in a `rescue` list.** Declare a narrow error before a broad one.
   A subclass's declarations are tried before its parent's.
 - **Declare `StandardError` classes.** Anything else raises a `ConfigurationError` at declaration: `Exception`,
