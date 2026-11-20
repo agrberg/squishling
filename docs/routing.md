@@ -106,6 +106,54 @@ end
 
 `squish` can come before or after the method's `def`.
 
+### Methods made on first call: `squish_missing`
+
+To squish a family of methods without one `squish` line for each, declare a name pattern. The first call of a
+matching name declares the method and sends the call to the LLM. Later calls find a real method.
+
+```ruby
+class UnitConverter
+  include Squishling
+
+  squish_missing(/\A(?<from>[a-z]+)_to_(?<to>[a-z]+)\z/,
+                 purpose: ->(from:, to:) { "Convert a value from #{from} to #{to}." }) do
+    number :value
+  end
+end
+
+converter = UnitConverter.new
+converter.celsius_to_fahrenheit(value: 100)  # the LLM answers, and the method now exists
+converter.celsius_to_fahrenheit(value: 0)    # a real method call
+converter.respond_to?(:miles_to_km)          # => true, before it is called
+converter.unrelated(value: 1)                # NoMethodError, with no request
+```
+
+`squish_missing` accepts the pattern, then the options of `squish`, and one more:
+
+- `purpose:` is a String, or a Proc that receives the named captures of the pattern as keywords.
+- `limit:` is the most names that the pattern makes (100 by default). A call with a name past the limit raises
+  `ConfigurationError` before the `purpose:` Proc runs, and `respond_to?` is false for that name. Keep the limit:
+  a name from user input, such as `public_send(params[:op])`, can otherwise make methods and LLM calls without end.
+
+The pattern matches a whole name, so `/a_to_b|c_to_d/` does not match `zz_a_to_b`.
+
+The limit is a ceiling on distinct names, not on calls. Names that the pattern matches but that nobody needs use
+up the limit. When the names come from user input, write the pattern as a closed list, such as
+`/\A(?:celsius|kelvin)_to_(?:celsius|kelvin)\z/`.
+
+A method that a subclass call makes belongs to the class that declared the pattern. The parent class, the sibling
+subclasses, and the limit share it.
+
+To harden a name, write a `def` for it after the declaration. A `def` whose name matches the pattern is squished like
+a method declared with `squish`: it runs its Ruby, and an unimplemented body or a `squish_when` predicate sends the call to
+the LLM. A `def` before the `squish_missing` line is not squished. A `def` in a `private` or `protected` section is
+not squished and keeps its visibility. Do not write `private def name` for a name that the pattern matches: Ruby
+reports the `def` before it applies `private`, so Squishling squishes the method and it is public.
+
+Names that no pattern matches go to the next `method_missing` in the ancestors, so a pattern hides no method.
+[`Squishling.verify`](verifying.md) checks each pattern: the schema builds, and the `purpose:` Proc accepts the
+captures.
+
 ## Handing off to the LLM with `squish!`
 
 Call `squish!` inside a squished method to hand *this call* to the LLM: for example, when the Ruby parser

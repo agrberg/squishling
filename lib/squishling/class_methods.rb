@@ -177,30 +177,36 @@ module Squishling
     #                   squawk_on: :retries do
     #     string :priority
     #   end
-    def squish(*names, purpose: nil, append_to_purpose: nil, output_schema: nil, model: nil, escalation: nil,
-      provider: nil, params: nil, cache: nil, harness: nil, when: nil, fallback: nil, validate: nil,
-      squawk: nil, squawk_on: nil, max_total_output_tokens: nil, max_total_input_tokens: nil, &schema_block)
-      schema = schema_block ? Schematist::Schema.create(&schema_block) : output_schema
-      model = ModelPath.declare(model, escalation, "#{self} squish")
-      raise ConfigurationError, "#{self} squish: provider: needs a model: or escalation:" if provider && !model
-
-      params &&= Params.normalize(params, "#{self} squish params")
-      cache = Cache.normalize(cache, "#{self} squish cache")
-      harness = Harness.normalize(harness, "#{self} squish") unless harness.nil?
-      unless append_to_purpose.nil?
-        append_to_purpose = Appendices.normalize(append_to_purpose, "#{self} squish append_to_purpose")
-      end
-      squawk = Squawk.validate(squawk, "#{self} squish")
-      squawk_on = Squawk.validate_on(squawk_on, "#{self} squish")
-      budget = Budget.build("#{self} squish", output: max_total_output_tokens, input: max_total_input_tokens)
-      options = { purpose:, append_to_purpose:, output_schema: schema, model:, provider:, params:, cache:, harness:,
-                  predicate: binding.local_variable_get(:when), fallback:, validator: validate, squawk:,
-                  squawk_on:, budget: }.compact
+    # Options: purpose:, append_to_purpose:, output_schema:, model:, escalation:, provider:, params:, cache:,
+    # harness:, when:, fallback:, validate:, squawk:, squawk_on:, max_total_output_tokens:, max_total_input_tokens:.
+    def squish(*names, **options, &schema_block)
+      options = squishling_method_options("#{self} squish", **options, &schema_block)
 
       names.map(&:to_sym).each do |name|
         (@squishling_methods ||= {})[name] = options
         @squishling_wrapper.wrap(name)
       end
+    end
+
+    # Squish every method whose whole name matches the pattern, made on its first call (and a `def` of a matching
+    # name declared after this line). purpose: is a String, or a Proc that receives the pattern's named captures as
+    # keywords; the other options and the schema block are those of `squish`. limit: caps how many names the
+    # pattern makes (100 by default), so a name from user input can't make unbounded methods and LLM calls:
+    #   squish_missing(/\A(?<from>[a-z]+)_to_(?<to>[a-z]+)\z/,
+    #                  purpose: ->(from:, to:) { "Convert a value from #{from} to #{to}." }) do
+    #     number :value
+    #   end
+    def squish_missing(pattern, purpose: nil, limit: Missing::DEFAULT_LIMIT, **options, &schema_block)
+      declared = Missing::Pattern.build(self, pattern, purpose:, limit:, options:, schema_block:)
+      (@squishling_missing_patterns ||= []) << declared
+      include Missing::Instance
+      extend Missing::Hook
+
+      self
+    end
+
+    def squishling_missing_patterns
+      squishling_inherited(:squishling_missing_patterns, []) + (@squishling_missing_patterns || [])
     end
 
     def squished_methods
@@ -223,6 +229,28 @@ module Squishling
     end
 
     private
+
+    # The checked and normalized options of one squished method; `where` names the declaration in errors.
+    def squishling_method_options(where, purpose: nil, append_to_purpose: nil, output_schema: nil, model: nil,
+      escalation: nil, provider: nil, params: nil, cache: nil, harness: nil, when: nil, fallback: nil, validate: nil,
+      squawk: nil, squawk_on: nil, max_total_output_tokens: nil, max_total_input_tokens: nil, &schema_block)
+      schema = schema_block ? Schematist::Schema.create(&schema_block) : output_schema
+      model = ModelPath.declare(model, escalation, where)
+      raise ConfigurationError, "#{where}: provider: needs a model: or escalation:" if provider && !model
+
+      params &&= Params.normalize(params, "#{where} params")
+      cache = Cache.normalize(cache, "#{where} cache")
+      harness = Harness.normalize(harness, where) unless harness.nil?
+      unless append_to_purpose.nil?
+        append_to_purpose = Appendices.normalize(append_to_purpose, "#{where} append_to_purpose")
+      end
+      squawk = Squawk.validate(squawk, where)
+      squawk_on = Squawk.validate_on(squawk_on, where)
+      budget = Budget.build(where, output: max_total_output_tokens, input: max_total_input_tokens)
+      { purpose:, append_to_purpose:, output_schema: schema, model:, provider:, params:, cache:, harness:,
+        predicate: binding.local_variable_get(:when), fallback:, validator: validate, squawk:,
+        squawk_on:, budget: }.compact
+    end
 
     # nil leaves a level unset (so the parent's applies); false for cache: is stored, to opt the class out.
     def declare_generation(params, cache, harness)
