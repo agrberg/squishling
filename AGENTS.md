@@ -131,6 +131,13 @@ Flag any change that breaks one of these; they are behavior contracts, not style
 - **Params can't override what Squishling owns.** Provider-specific params are merged into the request alongside
   what the adapter builds (RubyLLM's `with_provider_options`; the OpenAI-compatible body, where Squishling's keys win), so `Params::RESERVED_KEYS` (model, messages, structured-output format, tools, streaming) stay rejected. A
   provider 400 is a `ConfigurationError`, never something a fallback absorbs.
+- **Dynamic names are bounded and hide nothing.** A `squish_missing` pattern matches a whole name (it is wrapped in
+  `\A(?:…)\z`, so an alternation can't leave a side unanchored) and makes at most `limit:` names (default 100),
+  counted and defined under `Missing::LOCK`, so a name from user input can't make unbounded methods or requests.
+  Its `method_missing` and `respond_to_missing?` defer to `super` for a name no pattern matches, a private or
+  protected method, and (for `respond_to_missing?`) a name past the limit. Methods are defined on the pattern's
+  owner class, so subclasses share them and the limit. Options are checked when the pattern is declared, not on
+  the first call.
 - **No silent shadowing.** `include Squishling` raises `ConfigurationError` if the class inherits a method it would
   override (`Collisions`), and only adds the `result` alias when the class has no `result`. Classes' own methods win.
 - **Verification makes no request and holds classes weakly.** Every class that does `include Squishling` (and each
@@ -187,7 +194,8 @@ helpers, and the `sanitized_cause` helper with its `Adapter::ProviderFailure`), 
 `judge_instructions:`)/`append_to_purpose:`/`squawk:`/`squawk_on:` options — `purpose`, `append_to_purpose`,
 `output_schema`, `squish_when`, `squish_context`, `squish` (including `validate:`/`cache:`/`harness:`/`squawk:`/
 `squawk_on:`),
-`squish_validate`, `squish_fallback`, `result`/`squishling_result`, `squish!` (including
+`squish_validate`, `squish_fallback`, `squish_missing` (`limit:` and the options of `squish`),
+`result`/`squishling_result`, `squish!` (including
 `model:`/`escalation:`/`cache:`/`harness:`), and the `max_total_output_tokens:`/`max_total_input_tokens:` options of
 `squishling`, `squish`, and `squish!`), `Squishling::Configuration` options (including `default_harness`,
 `default_cache`, `budget_counts_cache_reads`,

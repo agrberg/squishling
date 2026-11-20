@@ -78,6 +78,40 @@ module Squishling
       end
     end
 
+    # Checks a squish_missing pattern, which has no method to check until a name matches.
+    class PatternCheck
+      def initialize(klass, pattern)
+        @klass = klass
+        @pattern = pattern
+      end
+
+      def problems
+        (schema + purpose).map do |message|
+          Verification::Problem.new(label: "#{@klass} squish_missing #{@pattern.regexp.inspect}", message:)
+        end
+      end
+
+      private
+
+      def schema
+        raw = @pattern.output_schema || @klass.output_schema
+        return ["has no output_schema"] unless raw
+
+        built = Schema.for(raw)
+        built.result_class
+        JSONSchemer.schema(built.json_schema).validate_schema.map { |error| error["error"] }
+      rescue ConfigurationError, ArgumentError => e
+        [e.message]
+      end
+
+      def purpose
+        value = @pattern.purpose
+        return value.nil? && !@klass.purpose ? ["has no purpose"] : [] unless value.is_a?(Proc)
+
+        KeywordCheck.messages(value, @pattern.capture_names, false).map { |message| "purpose #{message}" }
+      end
+    end
+
     # Whether a Proc called as instance_exec(**inputs, &proc) accepts the inputs.
     module KeywordCheck
       module_function
@@ -161,12 +195,18 @@ module Squishling
     end
 
     def class_problems(klass)
-      klass.squished_methods.keys.flat_map do |name|
+      method_problems = klass.squished_methods.keys.flat_map do |name|
         definition = klass.squishling_definition(name)
         next [] if unused_default?(definition)
 
         MethodCheck.new(definition).problems
       end
+      method_problems + own_patterns(klass).flat_map { |pattern| PatternCheck.new(klass, pattern).problems }
+    end
+
+    # A subclass's problems leave out the patterns it inherits, which its parent reports.
+    def own_patterns(klass)
+      klass.squishling_missing_patterns.select { |pattern| pattern.owner.equal?(klass) }
     end
 
     # Every class has the default method (call) squished, whether or not it uses it.
