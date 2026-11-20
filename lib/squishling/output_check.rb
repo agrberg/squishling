@@ -22,7 +22,7 @@ module Squishling
       return [nil, cap(errors)] if errors.any?
 
       result = prompt.schema.build(data, squished: true)
-      [result, prompt.role == :judge ? [] : InvalidOutputError::Detail.from(validator_errors(result), :validator)]
+      [result, prompt.output? ? InvalidOutputError::Detail.from(validator_errors(result), :validator) : []]
     end
 
     private

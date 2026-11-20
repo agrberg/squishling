@@ -54,7 +54,7 @@ module Squishling
     # The adapter raises ConfigurationError for setup mistakes (never retried) and LLMError for failures worth another
     # attempt, which moves on to the next attempt of the escalation (or propagates from the last one).
     # The request runs inside the configured observer (see Observer), on this thread: for samples, the worker's.
-    # role is nil for an escalation attempt, :sample (with its name) or :judge; attempt counts in attempts.
+    # role is nil for an escalation attempt, :sample (with its name), :judge, or :repair; attempt counts in attempts.
     # reask is whether this message is a retry in the same chat (see ModelPath::Step#request_params).
     def ask(chat, message, step, attempt:, attempts:, role: nil, sample: nil, reask: false)
       call = call_info(step, :chat, role:, sample:, attempt:, attempts:)

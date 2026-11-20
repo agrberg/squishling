@@ -11,9 +11,14 @@ module Squishling
     # The most of a rejected output that is forwarded to the next escalation step.
     MAX_FORWARDED_CHARS = 4_000
 
-    # One escalation's request: the system prompt, the output Schema, and the first user message. The judge's
-    # role (:judge) skips squish_validate and names the judge in errors and logs.
-    Prompt = Data.define(:instructions, :schema, :input, :role)
+    # One escalation's request: the system prompt, the output Schema, and the first user message. The role of a judge
+    # (:judge) or a repair (:repair) skips squish_validate and names it in errors and logs.
+    Prompt = Data.define(:instructions, :schema, :input, :role) do
+      # Whether it asks for the method's own output, and not a judge's verdict or a repair (see Repairs).
+      def output? = !%i[judge repair].include?(role)
+
+      def actor = { judge: "Judge", repair: "Repair" }.fetch(role, "LLM")
+    end
 
     def initialize(definition, receiver, inputs)
       @definition = definition
@@ -32,7 +37,9 @@ module Squishling
       harness = @definition.harness
       run = Run.new(definition: @definition, receiver: @receiver, inputs: @inputs, prompt: built.prompt,
         payload: built.payload, purpose: built.purpose, harness:)
-      accepted(call_harness(harness, run), run, harness)
+      result = accepted(call_harness(harness, run), run, harness)
+      @definition.repair&.request_rules(run, result)
+      result
     end
 
     # The first request the call would make (system prompt, output schema, user message), without making it.

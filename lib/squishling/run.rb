@@ -142,6 +142,14 @@ module Squishling
       @receiver.instance_exec(first, second, **@inputs, &compare) ? true : false
     end
 
+    # The repair request of squish_rescue's learn: (see Repairs), asked through the method's escalation on this call's
+    # budget. Its role is :repair, so squish_validate does not check it. Public only for Repairs::Request: it is not
+    # one of the primitives a harness gets.
+    def ask_repair(prompt)
+      owner!
+      escalate_with(steps, prompt)
+    end
+
     # Logs a warning, "[Squishling] Class#method message", to Squishling.config.logger, if there is one.
     def log(message)
       Squishling.config.logger&.warn("[Squishling] #{label} #{message}")
@@ -171,8 +179,8 @@ module Squishling
       raise ConfigurationError, "#{label}: a harness must call its run's primitives from the thread it runs on"
     end
 
-    # Makes each attempt of the path until an output passes (see #escalate). The judge's prompt (role :judge)
-    # skips squish_validate and names the judge in errors and logs.
+    # Makes each attempt of the path until an output passes (see #escalate). The prompt of a judge (role :judge) or a
+    # repair (role :repair) skips squish_validate and names its author in errors and logs.
     def escalate_with(path, prompt)
       chat = nil
       rejected = nil # [raw content, errors] of the last invalid output
@@ -213,7 +221,7 @@ module Squishling
 
         repeated = reask && response.content == rejected.first
         following = next_attempt(path, attempt, repeated)
-        error = invalid_output(response, errors, models.size, models.dup, prompt.role == :judge ? "Judge" : "LLM")
+        error = invalid_output(response, errors, models.size, models.dup, prompt.actor)
         squawk(prompt, path, attempt, response, error, reask:, repeated:, final: following.nil?)
         raise error unless following
 
@@ -282,7 +290,7 @@ module Squishling
     # Remembers a result of the method's own output (a judge's verdict isn't one), so a harness can only return
     # what a primitive produced.
     def produce(result, prompt)
-      @produced[result] = true unless prompt.role == :judge
+      @produced[result] = true if prompt.output?
       result
     end
 
