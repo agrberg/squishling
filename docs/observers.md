@@ -64,7 +64,7 @@ Anything else raises `ConfigurationError` when you assign it.
 | `purpose` | The purpose text sent as the system prompt (after `purpose` procs and `append_to_purpose` sections are resolved). It is the whole prompt, including any source you pass to `append_to_purpose` and whatever your `purpose` procs return, so treat it as sensitive: don't log it to a place the prompt itself shouldn't go |
 | `handed_off` | `true` when a `squish!` call sent the call to the LLM (typically from a `rescue`), `false` when `squish_when` or a missing implementation did |
 | `harness` | The harness type (`:escalation`, `:squishsum`, `:judged_squishsum`, or a [custom one](harnesses.md#custom-harnesses)) |
-| `role` | `nil` for an escalation attempt, `:sample` or `:judge`, as in `squawk`'s `metadata` |
+| `role` | `nil` for an escalation attempt, `:sample`, `:judge`, or `:repair`, as in `squawk`'s `metadata` |
 | `sample` | `"a"`, `"b"`, ... for a sample, else `nil` |
 | `attempt`, `attempts` | This request's 1-based position in the steps it was asked on, and how many there are: the escalation's expanded steps (or, for a custom harness, those passed to `run.escalate`), the sample's stage, or the judge's steps |
 | `model`, `provider` | The step's model and provider (`provider` is `nil` unless declared) |

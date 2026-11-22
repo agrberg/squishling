@@ -36,9 +36,9 @@ module Squishling
       define_method(name) do |*args, **kwargs, &block|
         impl =
           if defined?(super)
-            -> { super(*args, **kwargs, &block) }
+            ->(given = args, keywords = kwargs) { super(*given, **keywords, &block) }
           else
-            -> { raise NoImplementation, "#{self.class}##{name} has no implementation" }
+            ->(*) { raise NoImplementation, "#{self.class}##{name} has no implementation" }
           end
 
         Router.dispatch(self, name, args, kwargs, impl, wrapper:)

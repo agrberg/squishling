@@ -127,7 +127,9 @@ Flag any change that breaks one of these; they are behavior contracts, not style
   `Invoker::MAX_FORWARDED_CHARS`) to that step's provider, which may differ; a step can opt out with
   `forward_rejected: false`. A judged harness sends the judge's provider the purpose, the call's full input, and both
   candidate outputs, uncapped and with no opt-out, so a judge on another provider sees the input too (see
-  `docs/harnesses.md`, "The judge").
+  `docs/harnesses.md`, "The judge"). A `squish_rescue learn:` repair request sends the method's escalation providers
+  the error's class and message, the inputs `learn:` allows, and the LLM's result, and the failing method's Ruby
+  source only with `source: true` (see `docs/repairs.md`).
 - **Params can't override what Squishling owns.** Provider-specific params are merged into the request alongside
   what the adapter builds (RubyLLM's `with_provider_options`; the OpenAI-compatible body, where Squishling's keys win), so `Params::RESERVED_KEYS` (model, messages, structured-output format, tools, streaming) stay rejected. A
   provider 400 is a `ConfigurationError`, never something a fallback absorbs.
@@ -166,6 +168,20 @@ Flag any change that breaks one of these; they are behavior contracts, not style
   `Squishling::Error` is never rescued (a `ConfigurationError` must not reach the LLM or a fallback), nor is a
   `Testing::Error`, even under a declared `StandardError`. Its options are checked at declaration through
   `Definition#for_call`.
+- **A learned repair is data, proven on the call, and forgotten on failure.** `squish_rescue learn:` never runs
+  model-written code: the model answers with `Repairs::Rule`s (key renames), validated by `Rule.parse` and a strict
+  schema, and applied by Squishling's own code to a copy of the input. A rule is kept only when the Ruby
+  implementation, on the repaired input, returns the result the LLM gave (`Attempt#finish`), and used only after
+  `confirm:` different inputs proposed it (`Store#record`); an active rule is never replaced by a proposal. A
+  repaired call that raises, calls `squish!`, or returns an invalid result forgets the rule and runs Ruby on the
+  call's own input (`Active#run`), except for a `Squishling::Error` or `Testing::Error`, which propagate (a failed
+  request of a nested squished call, `LLMError`, `InvalidOutputError`, or `RequestRejectedError`, only proves nothing
+  while a rule is being checked). A key with an active rule makes no repair request. The
+  repair request (role `:repair`) is a `Run#ask_repair` (public only for `Repairs::Request`, not one of the `Run`
+  primitives a harness gets) on the call's own budget and observer; its failure never fails the call (an invalid
+  reply, `LLMError`, or `RequestRejectedError`), but another `ConfigurationError` does. `by:` is the developer's
+  code, so its errors propagate (it runs outside the `squish_rescue` rescues). Only inputs that are plain JSON and
+  plain positional or keyword parameters are repaired. The store is mutex-guarded and per declaration, so it is per process, and a class's subclasses share it.
 - **Built-ins and custom harnesses share one interface.** `:escalation`, `:squishsum`, and `:judged_squishsum` are
   `Harness::Base` subclasses written against `Run`, and custom harnesses are registered in the same mutex-guarded
   `Harness::Registry`. A harness's return value must be a typed result its `Run` produced (`Invoker#accepted`), so
@@ -195,7 +211,8 @@ helpers, and the `sanitized_cause` helper with its `Adapter::ProviderFailure`), 
 `judge_instructions:`)/`append_to_purpose:`/`squawk:`/`squawk_on:` options — `purpose`, `append_to_purpose`,
 `output_schema`, `squish_when`, `squish_context`, `squish` (including `validate:`/`cache:`/`harness:`/`squawk:`/
 `squawk_on:`),
-`squish_validate`, `squish_fallback`, `squish_rescue` (`as:` and the options of `squish!`),
+`squish_validate`, `squish_fallback`, `squish_rescue` (`as:`, `learn:`, and the options of `squish!`),
+`squishling_repairs`/`squishling_forget_repairs!`,
 `result`/`squishling_result`, `squish!` (including
 `model:`/`escalation:`/`cache:`/`harness:`), and the `max_total_output_tokens:`/`max_total_input_tokens:` options of
 `squishling`, `squish`, and `squish!`), `Squishling::Configuration` options (including `default_harness`,

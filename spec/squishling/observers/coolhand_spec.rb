@@ -126,6 +126,28 @@ RSpec.describe Squishling::Observers::Coolhand do
       expect(contexts.last[:template]).to eq(key: "TicketTriage#call/judge", name: "TicketTriage#call · judge")
     end
 
+    it "names the repair request of a learning squish_rescue" do
+      repairing = Class.new do
+        include Squishling
+
+        purpose "Triage the ticket."
+        output_schema do
+          string :priority
+          string :team
+        end
+        squish_rescue KeyError, learn: { by: ->(**) { :all }, confirm: 1 }
+
+        def self.to_s = "TicketTriage"
+
+        def call(doc:) = doc.fetch("priority")
+      end
+      stub_llm(high, { "renames" => [] })
+
+      repairing.call(doc: { "p" => "high" })
+
+      expect(contexts.last[:template]).to eq(key: "TicketTriage#call/repair", name: "TicketTriage#call · repair")
+    end
+
     it "doesn't declare when observer is false" do
       Squishling.configure { |c| c.observer = false }
       stub_llm(high)

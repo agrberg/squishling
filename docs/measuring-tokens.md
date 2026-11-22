@@ -81,7 +81,7 @@ that stays in Ruby makes no LLM request and never reaches the hook, so a label t
 been hardened. You can also set the hook per class (`squishling squawk: ...`) or per method. See
 [Observing every attempt](failures.md#observing-every-attempt-squawk) for every keyword and the rules for exceptions.
 Under a [harness](harnesses.md), including a [custom one](harnesses.md#custom-harnesses), every sample and judge
-request reaches the hook too. `metadata[:role]` (`nil`, `:sample`, or `:judge`) and `metadata[:sample]` (`"a"`, `"b"`, ...)
+request reaches the hook too. `metadata[:role]` (`nil`, `:sample`, `:judge`, or `:repair`) and `metadata[:sample]` (`"a"`, `"b"`, ...)
 split the spend by what each request was for.
 
 ### Your own observer
